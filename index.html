@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Louijie Duels!</title>
+<link href="https://fonts.googleapis.com/css2?family=MedievalSharp&family=UnifrakturMaguntia&family=Cinzel:wght@400;700;900&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --red: #c0392b; --red-light: #e74c3c; --red-glow: rgba(192,57,43,0.5);
+    --blue: #1a5fa8; --blue-light: #2980b9; --blue-glow: rgba(26,95,168,0.5);
+    --gold: #f0c040; --gold-dark: #b8860b; --gold-glow: rgba(240,192,64,0.4);
+    --bg: #0a0508; --panel: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08); --text: #e8dcc8; --muted: #7a6a58;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Cinzel', serif; min-height: 100vh;
+    overflow-x: hidden; position: relative;
+  }
+
+  /* ── BACKGROUND ── */
+  #bg-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+  /* ── SCREENS ── */
+  .screen { position: relative; z-index: 1; display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; align-items: center; }
+
+  /* ── TITLE ── */
+  .game-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(28px, 6vw, 64px);
+    color: var(--gold);
+    text-shadow: 0 0 30px var(--gold-glow), 0 0 60px var(--gold-glow), 2px 2px 0 #000;
+    letter-spacing: 0.05em; text-align: center; line-height: 1.1;
+    animation: titlePulse 3s ease-in-out infinite;
+  }
+  .game-subtitle {
+    font-size: 12px; letter-spacing: 0.4em; color: var(--muted);
+    text-transform: uppercase; margin-top: 6px;
+  }
+  @keyframes titlePulse {
+    0%,100% { text-shadow: 0 0 30px var(--gold-glow), 0 0 60px var(--gold-glow), 2px 2px 0 #000; }
+    50% { text-shadow: 0 0 50px var(--gold-glow), 0 0 100px var(--gold-glow), 2px 2px 0 #000; }
+  }
+
+  /* ── PANELS ── */
+  .panel {
+    background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border: 1px solid var(--border); border-radius: 16px;
+    backdrop-filter: blur(10px);
+  }
+
+  /* ── INPUTS ── */
+  input[type=text] {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px; padding: 12px 16px; color: var(--text);
+    font-family: 'Cinzel', serif; font-size: 15px; width: 100%;
+    outline: none; transition: border 0.2s;
+  }
+  input[type=text]:focus { border-color: var(--gold); box-shadow: 0 0 12px var(--gold-glow); }
+  input[type=text]::placeholder { color: var(--muted); }
+
+  /* ── BUTTONS ── */
+  .btn {
+    border: none; border-radius: 10px; padding: 13px 28px;
+    font-family: 'Cinzel', serif; font-size: 14px; letter-spacing: 0.08em;
+    cursor: pointer; transition: all 0.18s; font-weight: 700; position: relative; overflow: hidden;
+  }
+  .btn::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(255,255,255,0); transition: background 0.15s;
+  }
+  .btn:hover::after { background: rgba(255,255,255,0.08); }
+  .btn:active { transform: scale(0.97); }
+  .btn-gold {
+    background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+    color: #1a0a00; box-shadow: 0 4px 20px var(--gold-glow);
+  }
+  .btn-red {
+    background: linear-gradient(135deg, #8b0000, var(--red-light));
+    color: #fff; box-shadow: 0 4px 20px var(--red-glow);
+  }
+  .btn-blue {
+    background: linear-gradient(135deg, #0d3566, var(--blue-light));
+    color: #fff; box-shadow: 0 4px 20px var(--blue-glow);
+  }
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── LEADERBOARD ── */
+  .lb-row {
+    display: grid; grid-template-columns: 32px 1fr 48px 48px 48px 64px;
+    gap: 8px; align-items: center; padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-row.header { color: var(--muted); font-size: 10px; letter-spacing: 0.15em; padding-bottom: 6px; }
+  .lb-rank { color: var(--gold); font-weight: 700; text-align: center; }
+  .lb-rank.top1 { font-size: 18px; }
+  .lb-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb-num { text-align: center; color: var(--muted); }
+  .lb-wr { text-align: center; color: var(--gold); font-weight: 700; }
+
+  /* ── HP BARS ── */
+  #hp-bar-area {
+    width: 100%; max-width: 700px; padding: 16px 20px 0;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .hp-side { flex: 1; }
+  .hp-name { font-size: 12px; letter-spacing: 0.12em; margin-bottom: 5px; font-weight: 700; }
+  .hp-name.p1 { color: var(--red-light); }
+  .hp-name.p2 { color: var(--blue-light); text-align: right; }
+  .hp-track { height: 18px; background: #1a1020; border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
+  .hp-fill {
+    height: 100%; border-radius: 9px; transition: width 0.5s ease;
+    position: relative;
+  }
+  .hp-fill.p1 { background: linear-gradient(90deg, #8b0000, var(--red-light)); float: right; }
+  .hp-fill.p2 { background: linear-gradient(90deg, var(--blue-light), #0d3566); }
+  .hp-vs { color: var(--gold); font-size: 18px; font-weight: 900; flex-shrink: 0; }
+  .hp-val { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .hp-val.p1 { text-align: right; }
+
+  /* ── ARENA ── */
+  #arena {
+    width: 100%; max-width: 700px; height: 220px;
+    position: relative; margin: 10px 0; overflow: hidden;
+  }
+  .knight-wrap {
+    position: absolute; bottom: 0; display: flex;
+    flex-direction: column; align-items: center; width: 100px;
+  }
+  #knight-p1 { left: 40px; }
+  #knight-p2 { right: 40px; }
+
+  /* SVG Knights */
+  .knight-svg { width: 80px; height: 140px; }
+
+  /* animations */
+  @keyframes idle-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+  @keyframes run-right { 0%{transform:translateX(0)} 100%{transform:translateX(220px)} }
+  @keyframes run-left  { 0%{transform:translateX(0)} 100%{transform:translateX(-220px)} }
+  @keyframes swing { 0%{transform:rotate(0)} 40%{transform:rotate(-30deg)} 70%{transform:rotate(20deg)} 100%{transform:rotate(0)} }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+  @keyframes shield-flash { 0%,100%{opacity:1} 30%{opacity:0.3} 60%{opacity:1} }
+  @keyframes float-dmg { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-60px)} }
+
+  .idle { animation: idle-bob 2s ease-in-out infinite; }
+  .run-right { animation: run-right 0.5s ease-in forwards; }
+  .run-left  { animation: run-left  0.5s ease-in forwards; }
+  .do-swing  { animation: swing 0.4s ease-in-out; }
+  .do-shake  { animation: shake 0.4s ease-in-out; }
+  .shield-anim { animation: shield-flash 0.5s ease-in-out; }
+
+  .float-label {
+    position: absolute; font-size: 22px; font-weight: 900;
+    pointer-events: none; z-index: 10; animation: float-dmg 1.2s ease-out forwards;
+    font-family: 'Cinzel', serif; text-shadow: 0 2px 8px #000;
+  }
+
+  /* ── MOVE PICKER ── */
+  #move-area { width: 100%; max-width: 700px; padding: 0 20px; }
+  .move-prompt { font-size: 13px; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 12px; text-align: center; }
+  .move-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .move-btn {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 14px 6px; cursor: pointer; transition: all 0.15s;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text);
+    font-family: 'Cinzel', serif;
+  }
+  .move-btn:hover { background: rgba(255,255,255,0.09); border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+  .move-btn.selected { border-color: var(--gold); background: rgba(240,192,64,0.12); box-shadow: 0 0 16px var(--gold-glow); }
+  .move-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  .move-icon { font-size: 26px; }
+  .move-name { font-size: 11px; letter-spacing: 0.08em; font-weight: 700; }
+  .move-hint { font-size: 9px; color: var(--muted); text-align: center; line-height: 1.3; }
+
+  /* ── TIMER ── */
+  #timer-ring {
+    width: 54px; height: 54px; position: relative; flex-shrink: 0;
+  }
+  #timer-ring svg { transform: rotate(-90deg); }
+  #timer-text {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; font-weight: 900; color: var(--gold);
+  }
+  #timer-text.urgent { color: var(--red-light); animation: titlePulse 0.5s infinite; }
+
+  /* ── RESULT OVERLAY ── */
+  #result-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(6px);
+  }
+  #result-overlay.show { display: flex; }
+  .result-box { text-align: center; animation: resultPop 0.5s cubic-bezier(0.175,0.885,0.32,1.275); }
+  @keyframes resultPop { 0%{transform:scale(0.3);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .result-word {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(48px, 12vw, 100px); font-weight: 700;
+    line-height: 1; text-shadow: 0 0 60px currentColor;
+    animation: resultGlow 1s ease-in-out infinite alternate;
+  }
+  @keyframes resultGlow { from{text-shadow:0 0 40px currentColor} to{text-shadow:0 0 100px currentColor, 0 0 200px currentColor} }
+  .result-word.win { color: var(--gold); }
+  .result-word.defeat { color: var(--red-light); }
+  .result-word.draw { color: #aaa; }
+  .result-sub { font-size: 14px; color: var(--muted); margin-top: 12px; letter-spacing: 0.15em; }
+
+  /* ── STATUS BAR ── */
+  #status-bar {
+    width: 100%; max-width: 700px; padding: 8px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: var(--muted); letter-spacing: 0.08em;
+    border-top: 1px solid var(--border); margin-top: 8px;
+  }
+
+  /* ── LOBBY CODE ── */
+  .lobby-code {
+    font-family: 'Cinzel Decorative', serif; font-size: 42px;
+    color: var(--gold); letter-spacing: 0.2em;
+    text-shadow: 0 0 20px var(--gold-glow);
+  }
+
+  /* ── ROUND LOG ── */
+  .round-entry {
+    font-size: 12px; padding: 6px 10px; border-radius: 6px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+    color: var(--muted); margin-bottom: 5px;
+  }
+  .round-entry span.p1c { color: var(--red-light); }
+  .round-entry span.p2c { color: var(--blue-light); }
+
+  /* ── WAITING DOTS ── */
+  .dots::after {
+    content: ''; animation: dots 1.5s infinite;
+  }
+  @keyframes dots {
+    0%{content:'.'} 33%{content:'..'} 66%{content:'...'} 100%{content:''}
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  /* util */
+  .w100 { width: 100%; }
+  .mt8 { margin-top: 8px; }
+  .mt16 { margin-top: 16px; }
+  .mt24 { margin-top: 24px; }
+  .gap8 { gap: 8px; }
+  .gap12 { gap: 12px; }
+  .flex { display: flex; }
+  .col { flex-direction: column; }
+  .center { align-items: center; justify-content: center; }
+  .between { justify-content: space-between; }
+  .text-center { text-align: center; }
+  .divider { width: 100%; height: 1px; background: var(--border); margin: 16px 0; }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 10px; letter-spacing: 0.1em; font-weight: 700;
+  }
+  .tag-red { background: rgba(192,57,43,0.2); color: var(--red-light); border: 1px solid var(--red-glow); }
+  .tag-blue { background: rgba(26,95,168,0.2); color: var(--blue-light); border: 1px solid var(--blue-glow); }
+  .tag-gold { background: rgba(240,192,64,0.15); color: var(--gold); border: 1px solid var(--gold-glow); }
+
+  #toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: rgba(20,10,5,0.95); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 24px; font-size: 13px;
+    transition: transform 0.3s ease; z-index: 200; pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div id="toast"></div>
+
+<!-- ═══════════════════════════════════════════ ENTRY SCREEN -->
+<div class="screen active" id="screen-entry">
+  <div style="width:100%;max-width:480px;padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:20px;">
+
+    <div class="text-center" style="margin-bottom:8px;">
+      <div class="game-title">Louijie<br>Duels!</div>
+      <div class="game-subtitle">⚔ A Game of Steel &amp; Strategy ⚔</div>
+    </div>
+
+    <!-- leaderboard -->
+    <div class="panel w100" style="padding:16px;">
+      <div style="font-size:11px;letter-spacing:0.2em;color:var(--gold);margin-bottom:10px;text-align:center;">⚔ HALL OF GLORY ⚔</div>
+      <div class="lb-row header">
+        <div></div><div>NAME</div><div style="text-align:center">W</div><div style="text-align:center">L</div><div style="text-align:center">G</div><div style="text-align:center">WIN%</div>
+      </div>
+      <div id="lb-entry-list"><div style="text-align:center;color:var(--muted);font-size:12px;padding:16px;">No battles yet...</div></div>
+    </div>
+
+    <div class="panel w100" style="padding:20px 20px;">
+      <div style="font-size:11px;letter-spacing:0.15em;color:var(--muted);margin-bottom:10px;">YOUR NAME</div>
+      <input type="text" id="entry-name" placeholder="Enter your warrior name..." maxlength="20"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+        <button class="btn btn-gold" onclick="createLobby()">⚔ Create Lobby</button>
+        <button class="btn btn-blue" onclick="showJoin()">🔗 Join Lobby</button>
+      </div>
+    </div>
+
+    <div id="join-area" style="display:none;width:100%;">
+      <div class="panel w100" style="padding:20px;">
+        <div style="font-size:11px;letter-spacing:0.15em;color:var(--muted);margin-bottom:10px;">ROOM CODE</div>
+        <input type="text" id="join-code" placeholder="Enter 4-letter code..." maxlength="4" style="text-transform:uppercase;letter-spacing:0.3em;font-size:20px;text-align:center;"/>
+        <button class="btn btn-gold w100 mt8" onclick="joinLobby()">Enter Arena</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ LOBBY SCREEN -->
+<div class="screen" id="screen-lobby" style="justify-content:center;">
+  <div style="width:100%;max-width:480px;padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:20px;">
+    <div class="game-title" style="font-size:clamp(20px,4vw,36px);">Louijie Duels!</div>
+
+    <div class="panel w100 text-center" style="padding:32px 24px;">
+      <div style="font-size:12px;letter-spacing:0.2em;color:var(--muted);margin-bottom:10px;">SHARE THIS CODE</div>
+      <div class="lobby-code" id="lobby-code-display">----</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px;">Give this code to your opponent</div>
+      <div class="divider"></div>
+      <div id="lobby-status" style="font-size:14px;color:var(--muted);" class="dots">Waiting for opponent</div>
+      <div id="lobby-players" style="margin-top:16px;display:flex;gap:16px;justify-content:center;"></div>
+    </div>
+
+    <button class="btn btn-ghost w100" onclick="leaveLobby()">← Leave</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ GAME SCREEN -->
+<div class="screen" id="screen-game">
+
+  <!-- HP BARS -->
+  <div id="hp-bar-area">
+    <div class="hp-side">
+      <div class="hp-name p1" id="p1-name-display">PLAYER 1</div>
+      <div class="hp-track"><div class="hp-fill p1" id="hp-fill-p1" style="width:100%"></div></div>
+      <div class="hp-val p1" id="hp-val-p1">100 HP</div>
+    </div>
+    <div class="hp-vs">VS</div>
+    <div class="hp-side">
+      <div class="hp-name p2" id="p2-name-display">PLAYER 2</div>
+      <div class="hp-track"><div class="hp-fill p2" id="hp-fill-p2" style="width:100%"></div></div>
+      <div class="hp-val p2" id="hp-val-p2">100 HP</div>
+    </div>
+  </div>
+
+  <!-- ARENA -->
+  <div id="arena">
+    <!-- P1 Red Knight -->
+    <div class="knight-wrap idle" id="knight-p1">
+      <svg class="knight-svg" viewBox="0 0 80 140" xmlns="http://www.w3.org/2000/svg">
+        <!-- Red Knight -->
+        <!-- Plume -->
+        <ellipse cx="40" cy="8" rx="6" ry="10" fill="#c0392b" opacity="0.8"/>
+        <line x1="40" y1="8" x2="40" y2="18" stroke="#8b0000" stroke-width="2"/>
+        <!-- Helmet -->
+        <rect x="24" y="16" width="32" height="26" rx="6" fill="#7a7a8a"/>
+        <rect x="26" y="22" width="28" height="10" rx="2" fill="#555565"/>
+        <!-- Visor slits -->
+        <rect x="29" y="24" width="8" height="3" rx="1" fill="#c0392b" opacity="0.9"/>
+        <rect x="43" y="24" width="8" height="3" rx="1" fill="#c0392b" opacity="0.9"/>
+        <!-- Neck -->
+        <rect x="34" y="42" width="12" height="8" fill="#888898"/>
+        <!-- Chest armor -->
+        <rect x="18" y="50" width="44" height="34" rx="5" fill="#8a0a0a"/>
+        <rect x="22" y="54" width="36" height="26" rx="3" fill="#a01010"/>
+        <!-- Chest emblem -->
+        <text x="40" y="72" text-anchor="middle" font-size="16" fill="#c0392b">⚔</text>
+        <!-- Shoulders -->
+        <ellipse cx="16" cy="58" rx="10" ry="8" fill="#6a0808"/>
+        <ellipse cx="64" cy="58" rx="10" ry="8" fill="#6a0808"/>
+        <!-- Left arm (shield arm) -->
+        <rect x="6" y="62" width="12" height="28" rx="4" fill="#8a0a0a"/>
+        <!-- Shield -->
+        <path d="M2 68 L2 90 Q2 100 10 104 Q18 100 18 90 L18 68 Z" fill="#c0392b" stroke="#8b0000" stroke-width="2"/>
+        <line x1="10" y1="68" x2="10" y2="102" stroke="#8b0000" stroke-width="1.5"/>
+        <line x1="2" y1="82" x2="18" y2="82" stroke="#8b0000" stroke-width="1.5"/>
+        <!-- Right arm (sword arm) -->
+        <rect x="62" y="62" width="12" height="28" rx="4" fill="#8a0a0a"/>
+        <!-- Sword -->
+        <rect x="72" y="40" width="5" height="45" rx="1" fill="#ccc"/>
+        <rect x="68" y="62" width="13" height="4" rx="1" fill="#888"/>
+        <rect x="73" y="82" width="3" height="10" rx="1" fill="#8b0000"/>
+        <!-- Belt -->
+        <rect x="18" y="84" width="44" height="8" rx="2" fill="#5a0808"/>
+        <rect x="37" y="85" width="6" height="6" rx="1" fill="#c0392b"/>
+        <!-- Legs -->
+        <rect x="22" y="92" width="16" height="30" rx="4" fill="#8a0a0a"/>
+        <rect x="42" y="92" width="16" height="30" rx="4" fill="#8a0a0a"/>
+        <!-- Greaves -->
+        <rect x="20" y="118" width="20" height="14" rx="3" fill="#6a0808"/>
+        <rect x="40" y="118" width="20" height="14" rx="3" fill="#6a0808"/>
+        <!-- Boots -->
+        <rect x="18" y="130" width="22" height="10" rx="3" fill="#3a0404"/>
+        <rect x="40" y="130" width="22" height="10" rx="3" fill="#3a0404"/>
+      </svg>
+    </div>
+
+    <!-- P2 Blue Knight -->
+    <div class="knight-wrap idle" id="knight-p2" style="transform:scaleX(-1)">
+      <svg class="knight-svg" viewBox="0 0 80 140" xmlns="http://www.w3.org/2000/svg">
+        <!-- Blue Knight -->
+        <!-- Plume -->
+        <ellipse cx="40" cy="8" rx="6" ry="10" fill="#2980b9" opacity="0.8"/>
+        <line x1="40" y1="8" x2="40" y2="18" stroke="#1a5fa8" stroke-width="2"/>
+        <!-- Helmet -->
+        <rect x="24" y="16" width="32" height="26" rx="6" fill="#7a7a8a"/>
+        <rect x="26" y="22" width="28" height="10" rx="2" fill="#555565"/>
+        <!-- Visor slits -->
+        <rect x="29" y="24" width="8" height="3" rx="1" fill="#2980b9" opacity="0.9"/>
+        <rect x="43" y="24" width="8" height="3" rx="1" fill="#2980b9" opacity="0.9"/>
+        <!-- Neck -->
+        <rect x="34" y="42" width="12" height="8" fill="#888898"/>
+        <!-- Chest armor -->
+        <rect x="18" y="50" width="44" height="34" rx="5" fill="#0a2a6a"/>
+        <rect x="22" y="54" width="36" height="26" rx="3" fill="#103080"/>
+        <!-- Chest emblem -->
+        <text x="40" y="72" text-anchor="middle" font-size="16" fill="#2980b9">⚔</text>
+        <!-- Shoulders -->
+        <ellipse cx="16" cy="58" rx="10" ry="8" fill="#08206a"/>
+        <ellipse cx="64" cy="58" rx="10" ry="8" fill="#08206a"/>
+        <!-- Left arm (shield arm) -->
+        <rect x="6" y="62" width="12" height="28" rx="4" fill="#0a2a6a"/>
+        <!-- Shield -->
+        <path d="M2 68 L2 90 Q2 100 10 104 Q18 100 18 90 L18 68 Z" fill="#2980b9" stroke="#1a5fa8" stroke-width="2"/>
+        <line x1="10" y1="68" x2="10" y2="102" stroke="#1a5fa8" stroke-width="1.5"/>
+        <line x1="2" y1="82" x2="18" y2="82" stroke="#1a5fa8" stroke-width="1.5"/>
+        <!-- Right arm (sword arm) -->
+        <rect x="62" y="62" width="12" height="28" rx="4" fill="#0a2a6a"/>
+        <!-- Sword -->
+        <rect x="72" y="40" width="5" height="45" rx="1" fill="#ccc"/>
+        <rect x="68" y="62" width="13" height="4" rx="1" fill="#888"/>
+        <rect x="73" y="82" width="3" height="10" rx="1" fill="#1a5fa8"/>
+        <!-- Belt -->
+        <rect x="18" y="84" width="44" height="8" rx="2" fill="#081a4a"/>
+        <rect x="37" y="85" width="6" height="6" rx="1" fill="#2980b9"/>
+        <!-- Legs -->
+        <rect x="22" y="92" width="16" height="30" rx="4" fill="#0a2a6a"/>
+        <rect x="42" y="92" width="16" height="30" rx="4" fill="#0a2a6a"/>
+        <!-- Greaves -->
+        <rect x="20" y="118" width="20" height="14" rx="3" fill="#08206a"/>
+        <rect x="40" y="118" width="20" height="14" rx="3" fill="#08206a"/>
+        <!-- Boots -->
+        <rect x="18" y="130" width="22" height="10" rx="3" fill="#040418"/>
+        <rect x="40" y="130" width="22" height="10" rx="3" fill="#040418"/>
+      </svg>
+    </div>
+
+    <!-- ground line -->
+    <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(240,192,64,0.3),transparent);"></div>
+  </div>
+
+  <!-- MOVE + TIMER ROW -->
+  <div id="move-area">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+      <div id="timer-ring">
+        <svg width="54" height="54" viewBox="0 0 54 54">
+          <circle cx="27" cy="27" r="22" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5"/>
+          <circle id="timer-arc" cx="27" cy="27" r="22" fill="none" stroke="#f0c040" stroke-width="5"
+            stroke-dasharray="138.2" stroke-dashoffset="0" stroke-linecap="round"/>
+        </svg>
+        <div id="timer-text">30</div>
+      </div>
+      <div style="flex:1;">
+        <div class="move-prompt" id="move-prompt">Choose your move!</div>
+        <div id="waiting-move" style="display:none;font-size:12px;color:var(--muted);letter-spacing:0.1em;" class="dots">Waiting for opponent</div>
+      </div>
+    </div>
+    <div class="move-grid" id="move-grid">
+      <button class="move-btn" onclick="pickMove('slash')">
+        <span class="move-icon">⚔️</span>
+        <span class="move-name">SLASH</span>
+        <span class="move-hint">10 dmg if no Shield</span>
+      </button>
+      <button class="move-btn" onclick="pickMove('pierce')">
+        <span class="move-icon">🗡️</span>
+        <span class="move-name">PIERCE</span>
+        <span class="move-hint">Breaks Shield / Risky</span>
+      </button>
+      <button class="move-btn" onclick="pickMove('shield')">
+        <span class="move-icon">🛡️</span>
+        <span class="move-name">SHIELD</span>
+        <span class="move-hint">Absorbs Slash</span>
+      </button>
+      <button class="move-btn" onclick="pickMove('nothing')">
+        <span class="move-icon">💤</span>
+        <span class="move-name">DO NOTHING</span>
+        <span class="move-hint">Exposed to all attacks</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- STATUS + ROUND LOG -->
+  <div id="status-bar">
+    <div id="game-status">Round <span id="round-num">1</span></div>
+    <div id="conn-status" style="color:var(--gold)">● Connected</div>
+  </div>
+  <div style="width:100%;max-width:700px;padding:0 20px 20px;overflow-y:auto;max-height:140px;" id="round-log"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ RESULT OVERLAY -->
+<div id="result-overlay">
+  <div class="result-box">
+    <div class="result-word" id="result-word">VICTORY</div>
+    <div class="result-sub" id="result-sub">You have proven your worth!</div>
+    <div style="margin-top:32px;">
+      <button class="btn btn-gold" onclick="backToMenu()" style="font-size:16px;padding:16px 40px;">Return to Hall of Glory</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ FIREBASE + GAME LOGIC -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC9kLMNm29oa2pZE1DrsVHGnvNHpS5uI-g",
+  authDomain: "louijie-duels.firebaseapp.com",
+  databaseURL: "https://louijie-duels-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "louijie-duels",
+  storageBucket: "louijie-duels.firebasestorage.app",
+  messagingSenderId: "491851702476",
+  appId: "1:491851702476:web:e22fca26c5ce27bc09a269"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ── STATE ──────────────────────────────────────────────────────────
+let myName = '', myRole = '', lobbyCode = '', lobbyRef = null;
+let myHp = 100, oppHp = 100;
+let myMove = null, round = 1;
+let timerInterval = null, timerVal = 30;
+let resolving = false;
+let unsubLobby = null;
+const MAX_HP = 100;
+
+// ── BG CANVAS ─────────────────────────────────────────────────────
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+function resizeCanvas() { canvas.width = innerWidth; canvas.height = innerHeight; }
+resizeCanvas(); window.addEventListener('resize', resizeCanvas);
+for (let i = 0; i < 60; i++) particles.push({
+  x: Math.random()*innerWidth, y: Math.random()*innerHeight,
+  r: Math.random()*1.5+0.3, vx: (Math.random()-0.5)*0.3, vy: -Math.random()*0.4-0.1,
+  a: Math.random()
+});
+function drawBg() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // gradient bg
+  const g = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width*0.8);
+  g.addColorStop(0,'rgba(40,10,10,0.4)'); g.addColorStop(1,'rgba(5,3,8,0)');
+  ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width,canvas.height);
+  // particles
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.a -= 0.002;
+    if (p.a <= 0 || p.y < -10) {
+      p.x=Math.random()*canvas.width; p.y=canvas.height+10; p.a=Math.random()*0.6+0.2;
+    }
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(240,192,64,${p.a*0.6})`; ctx.fill();
+  });
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// ── SCREENS ────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+}
+
+// ── TOAST ──────────────────────────────────────────────────────────
+function toast(msg, dur=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), dur);
+}
+
+// ── LEADERBOARD ────────────────────────────────────────────────────
+async function loadLeaderboard(containerId) {
+  const snap = await get(ref(db,'leaderboard'));
+  const data = snap.val() || {};
+  const rows = Object.values(data)
+    .sort((a,b)=> (b.wins||0)-(a.wins||0) || (b.games||0)-(a.games||0))
+    .slice(0,10);
+  const el = document.getElementById(containerId);
+  if (!rows.length) { el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:16px;">No battles yet...</div>'; return; }
+  const medals = ['🥇','🥈','🥉'];
+  el.innerHTML = rows.map((r,i)=>{
+    const wr = r.games ? Math.round((r.wins/r.games)*100) : 0;
+    return `<div class="lb-row">
+      <div class="lb-rank ${i===0?'top1':''}">${medals[i]||i+1}</div>
+      <div class="lb-name">${r.name||'?'}</div>
+      <div class="lb-num" style="color:#4caf50">${r.wins||0}</div>
+      <div class="lb-num" style="color:var(--red-light)">${r.losses||0}</div>
+      <div class="lb-num">${r.games||0}</div>
+      <div class="lb-wr">${wr}%</div>
+    </div>`;
+  }).join('');
+}
+loadLeaderboard('lb-entry-list');
+
+// ── ENTRY / LOBBY ──────────────────────────────────────────────────
+window.showJoin = ()=>{
+  const a = document.getElementById('join-area');
+  a.style.display = a.style.display==='none'?'block':'none';
+};
+
+window.createLobby = async ()=>{
+  myName = document.getElementById('entry-name').value.trim();
+  if (!myName) { toast('Enter your warrior name!'); return; }
+  myRole = 'p1';
+  lobbyCode = Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
+  lobbyRef = ref(db,'lobbies/'+lobbyCode);
+  await set(lobbyRef, { p1: myName, status:'waiting', created: serverTimestamp() });
+  onDisconnect(lobbyRef).remove();
+  showScreen('lobby');
+  document.getElementById('lobby-code-display').textContent = lobbyCode;
+  listenLobby();
+};
+
+window.joinLobby = async ()=>{
+  myName = document.getElementById('entry-name').value.trim();
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!myName) { toast('Enter your warrior name!'); return; }
+  if (code.length !== 4) { toast('Enter a valid 4-letter code!'); return; }
+  const snap = await get(ref(db,'lobbies/'+code));
+  if (!snap.exists()) { toast('Lobby not found!'); return; }
+  const data = snap.val();
+  if (data.status !== 'waiting') { toast('Lobby already in progress!'); return; }
+  lobbyCode = code; myRole = 'p2';
+  lobbyRef = ref(db,'lobbies/'+lobbyCode);
+  await update(lobbyRef, { p2: myName, status:'ready' });
+  onDisconnect(lobbyRef).update({ status:'abandoned', disconnected: myRole });
+  showScreen('lobby');
+  document.getElementById('lobby-code-display').textContent = lobbyCode;
+  listenLobby();
+};
+
+function listenLobby() {
+  if (unsubLobby) unsubLobby();
+  unsubLobby = onValue(lobbyRef, snap=>{
+    if (!snap.exists()) { handleAbandon(); return; }
+    const d = snap.val();
+    // update player tags
+    const pl = document.getElementById('lobby-players');
+    pl.innerHTML = `
+      <span class="tag tag-red">🔴 ${d.p1||'?'}</span>
+      ${d.p2?`<span class="tag tag-blue">🔵 ${d.p2||'?'}</span>`:''}`;
+    if (d.status==='ready' || d.p2) {
+      document.getElementById('lobby-status').textContent='Opponent found! Starting...';
+      document.getElementById('lobby-status').classList.remove('dots');
+      setTimeout(()=>startGame(d), 1200);
+      if (unsubLobby) { unsubLobby(); unsubLobby=null; }
+    }
+    if (d.status==='abandoned') { handleAbandon(); }
+  });
+}
+
+window.leaveLobby = async ()=>{
+  if (lobbyRef) await remove(lobbyRef);
+  showScreen('entry'); loadLeaderboard('lb-entry-list');
+};
+
+// ── GAME START ─────────────────────────────────────────────────────
+function startGame(lobbyData) {
+  myHp = MAX_HP; oppHp = MAX_HP; round = 1; myMove = null; resolving = false;
+  const p1name = lobbyData.p1, p2name = lobbyData.p2;
+  const myDisplayName = myName, oppName = myRole==='p1' ? p2name : p1name;
+  document.getElementById('p1-name-display').textContent = (myRole==='p1'?myName:oppName).toUpperCase();
+  document.getElementById('p2-name-display').textContent = (myRole==='p2'?myName:oppName).toUpperCase();
+  updateHpBars();
+  document.getElementById('round-log').innerHTML='';
+  showScreen('game');
+  // reset knights
+  setKnightIdle('knight-p1'); setKnightIdle('knight-p2');
+  // setup disconnect handler
+  onDisconnect(lobbyRef).update({ status:'abandoned', disconnected: myRole });
+  listenGame();
+  startTimer();
+}
+
+// ── GAME LISTENER ─────────────────────────────────────────────────
+function listenGame() {
+  if (unsubLobby) unsubLobby();
+  unsubLobby = onValue(lobbyRef, snap=>{
+    if (!snap.exists()) { handleAbandon(); return; }
+    const d = snap.val();
+    if (d.status==='abandoned') { handleAbandon(); return; }
+    // check if both moves in
+    const p1move = d.p1move, p2move = d.p2move;
+    if (p1move && p2move && !resolving) {
+      resolving = true;
+      stopTimer();
+      resolveRound(p1move, p2move, d);
+    }
+  });
+}
+
+// ── MOVE PICKING ───────────────────────────────────────────────────
+window.pickMove = async (move)=>{
+  if (myMove) return;
+  myMove = move;
+  document.querySelectorAll('.move-btn').forEach(b=>b.disabled=true);
+  document.querySelectorAll('.move-btn').forEach(b=>{ if(b.onclick?.toString().includes(`'${move}'`)) b.classList.add('selected'); });
+  document.getElementById('move-prompt').style.display='none';
+  document.getElementById('waiting-move').style.display='block';
+  stopTimer();
+  const field = myRole+'move';
+  await update(lobbyRef, { [field]: move });
+};
+
+// ── TIMER ──────────────────────────────────────────────────────────
+function startTimer() {
+  timerVal = 30;
+  updateTimerUI();
+  timerInterval = setInterval(async ()=>{
+    timerVal--;
+    updateTimerUI();
+    if (timerVal <= 0) {
+      stopTimer();
+      if (!myMove) { await pickMove('nothing'); }
+    }
+  }, 1000);
+}
+function stopTimer() { clearInterval(timerInterval); }
+function updateTimerUI() {
+  const arc = document.getElementById('timer-arc');
+  const txt = document.getElementById('timer-text');
+  const pct = timerVal/30;
+  arc.style.strokeDashoffset = 138.2*(1-pct);
+  arc.style.stroke = timerVal<=10 ? '#e74c3c' : '#f0c040';
+  txt.textContent = timerVal;
+  txt.className = timerVal<=10 ? 'urgent' : '';
+}
+
+// ── RESOLVE ROUND ─────────────────────────────────────────────────
+function resolveRound(p1move, p2move, lobbyData) {
+  const myMoveActual  = myRole==='p1' ? p1move : p2move;
+  const oppMoveActual = myRole==='p1' ? p2move : p1move;
+  const result = calcDamage(p1move, p2move);
+  // from my perspective
+  const myDmg  = myRole==='p1' ? result.p1dmg : result.p2dmg;
+  const oppDmg = myRole==='p1' ? result.p2dmg : result.p1dmg;
+
+  // animate
+  animateClash(myMoveActual, oppMoveActual, myDmg, oppDmg, ()=>{
+    myHp  = Math.max(0, myHp  - myDmg);
+    oppHp = Math.max(0, oppHp - oppDmg);
+    updateHpBars();
+    addRoundLog(myMoveActual, oppMoveActual, result.desc, myDmg, oppDmg);
+    document.getElementById('round-num').textContent = ++round;
+
+    if (myHp<=0 || oppHp<=0) {
+      endGame(myHp, oppHp, lobbyData);
+    } else {
+      // clear moves for next round
+      setTimeout(async ()=>{
+        await update(lobbyRef, { p1move:null, p2move:null });
+        resetMoveUI();
+        resolving=false; myMove=null;
+        startTimer();
+      }, 600);
+    }
+  });
+}
+
+function calcDamage(p1, p2) {
+  if (p1===p2) {
+    if (p1==='pierce') return {p1dmg:5,p2dmg:5,desc:"🗡️ Blades clash — both take 5 damage!"};
+    return {p1dmg:0,p2dmg:0,desc:"Both chose the same — nothing happens!"};
+  }
+  // slash
+  if (p1==='slash'&&p2==='shield') return {p1dmg:0,p2dmg:0,desc:"⚔️ Slash absorbed by Shield!"};
+  if (p2==='slash'&&p1==='shield') return {p1dmg:0,p2dmg:0,desc:"⚔️ Slash absorbed by Shield!"};
+  if (p1==='slash'&&(p2==='pierce'||p2==='nothing')) return {p1dmg:0,p2dmg:10,desc:"⚔️ Slash connects — 10 damage!"};
+  if (p2==='slash'&&(p1==='pierce'||p1==='nothing')) return {p1dmg:10,p2dmg:0,desc:"⚔️ Slash connects — 10 damage!"};
+  // pierce
+  if (p1==='pierce'&&p2==='shield') return {p1dmg:0,p2dmg:10,desc:"🗡️ Pierce breaks Shield — 10 damage!"};
+  if (p2==='pierce'&&p1==='shield') return {p1dmg:10,p2dmg:0,desc:"🗡️ Pierce breaks Shield — 10 damage!"};
+  if (p1==='pierce'&&p2==='nothing') return {p1dmg:10,p2dmg:10,desc:"🗡️ Pierce backfires — both take 10!"};
+  if (p2==='pierce'&&p1==='nothing') return {p1dmg:10,p2dmg:10,desc:"🗡️ Pierce backfires — both take 10!"};
+  // nothing vs shield
+  if ((p1==='nothing'&&p2==='shield')||(p2==='nothing'&&p1==='shield')) return {p1dmg:0,p2dmg:0,desc:"🛡️ Shield stands firm — nothing happens."};
+  return {p1dmg:0,p2dmg:0,desc:"Nothing happens."};
+}
+
+// ── ANIMATIONS ────────────────────────────────────────────────────
+function setKnightIdle(id) {
+  const k = document.getElementById(id);
+  k.className = 'knight-wrap idle';
+  k.style.transform = id==='knight-p2' ? 'scaleX(-1)' : '';
+}
+
+function animateClash(myMove, oppMove, myDmg, oppDmg, cb) {
+  const kMe  = document.getElementById(myRole==='p1'?'knight-p1':'knight-p2');
+  const kOpp = document.getElementById(myRole==='p1'?'knight-p2':'knight-p1');
+
+  const isAttack = m => m==='slash'||m==='pierce';
+
+  // run in if attacking
+  if (isAttack(myMove)) {
+    kMe.classList.remove('idle');
+    kMe.classList.add(myRole==='p1'?'run-right':'run-left');
+  }
+  if (isAttack(oppMove)) {
+    kOpp.classList.remove('idle');
+    kOpp.classList.add(myRole==='p1'?'run-left':'run-right');
+  }
+
+  setTimeout(()=>{
+    if (myDmg>0) { kMe.classList.add('do-shake'); spawnDmgLabel(true, myDmg); }
+    if (oppDmg>0) { kOpp.classList.add('do-shake'); spawnDmgLabel(false, oppDmg); }
+    if (isAttack(myMove)) kMe.classList.add('do-swing');
+    if (isAttack(oppMove)) kOpp.classList.add('do-swing');
+    if (myMove==='shield') kMe.classList.add('shield-anim');
+    if (oppMove==='shield') kOpp.classList.add('shield-anim');
+  }, 500);
+
+  setTimeout(()=>{
+    setKnightIdle('knight-p1'); setKnightIdle('knight-p2');
+    cb();
+  }, 1400);
+}
+
+function spawnDmgLabel(isMe, dmg) {
+  const arena = document.getElementById('arena');
+  const label = document.createElement('div');
+  label.className = 'float-label';
+  label.textContent = dmg===0 ? 'MISS' : `-${dmg}`;
+  label.style.color = dmg===0 ? '#aaa' : '#ff4444';
+  label.style.left = isMe ? '60px' : 'calc(100% - 120px)';
+  label.style.bottom = '140px';
+  arena.appendChild(label);
+  setTimeout(()=>label.remove(), 1200);
+}
+
+function updateHpBars() {
+  const [p1hp, p2hp] = myRole==='p1' ? [myHp, oppHp] : [oppHp, myHp];
+  document.getElementById('hp-fill-p1').style.width = (p1hp/MAX_HP*100)+'%';
+  document.getElementById('hp-fill-p2').style.width = (p2hp/MAX_HP*100)+'%';
+  document.getElementById('hp-val-p1').textContent = p1hp+' HP';
+  document.getElementById('hp-val-p2').textContent = p2hp+' HP';
+}
+
+function resetMoveUI() {
+  document.querySelectorAll('.move-btn').forEach(b=>{ b.disabled=false; b.classList.remove('selected'); });
+  document.getElementById('move-prompt').style.display='block';
+  document.getElementById('waiting-move').style.display='none';
+  updateTimerUI();
+}
+
+function addRoundLog(myM, oppM, desc, myD, oppD) {
+  const log = document.getElementById('round-log');
+  const icons = {slash:'⚔️',pierce:'🗡️',shield:'🛡️',nothing:'💤'};
+  const entry = document.createElement('div');
+  entry.className='round-entry';
+  entry.innerHTML=`<span class="p1c">${icons[myM]} ${myM}</span> vs <span class="p2c">${icons[oppM]} ${oppM}</span> — ${desc}`;
+  log.prepend(entry);
+}
+
+// ── END GAME ─────────────────────────────────────────────────────
+async function endGame(myHp, oppHp, lobbyData) {
+  stopTimer();
+  const isDraw = myHp<=0 && oppHp<=0;
+  const iWon   = oppHp<=0 && myHp>0;
+
+  await updateLeaderboard(myName, iWon, isDraw);
+  const oppName = myRole==='p1' ? lobbyData.p2 : lobbyData.p1;
+  await updateLeaderboard(oppName, !iWon && !isDraw, isDraw);
+
+  await remove(lobbyRef);
+
+  const word = document.getElementById('result-word');
+  const sub  = document.getElementById('result-sub');
+  if (isDraw) {
+    word.textContent='DRAW'; word.className='result-word draw';
+    sub.textContent='An equal match — honor to both warriors!';
+  } else if (iWon) {
+    word.textContent='VICTORY'; word.className='result-word win';
+    sub.textContent='Your blade stands triumphant!';
+  } else {
+    word.textContent='DEFEAT'; word.className='result-word defeat';
+    sub.textContent='You have fallen... but honor remains.';
+  }
+  document.getElementById('result-overlay').classList.add('show');
+}
+
+async function updateLeaderboard(name, won, draw) {
+  if (!name) return;
+  const key = name.toLowerCase().replace(/[^a-z0-9]/g,'_');
+  const snap = await get(ref(db,'leaderboard/'+key));
+  const cur = snap.val() || {name, wins:0, losses:0, games:0};
+  cur.wins   = (cur.wins||0)   + (won?1:0);
+  cur.losses = (cur.losses||0) + (!won&&!draw?1:0);
+  cur.games  = (cur.games||0)  + 1;
+  await set(ref(db,'leaderboard/'+key), cur);
+}
+
+// ── ABANDON ──────────────────────────────────────────────────────
+function handleAbandon() {
+  stopTimer();
+  if (document.getElementById('screen-game').classList.contains('active')) {
+    const word = document.getElementById('result-word');
+    const sub  = document.getElementById('result-sub');
+    word.textContent='VICTORY'; word.className='result-word win';
+    sub.textContent='Your opponent fled the battlefield!';
+    document.getElementById('result-overlay').classList.add('show');
+    updateLeaderboard(myName, true, false);
+  } else {
+    showScreen('entry'); loadLeaderboard('lb-entry-list');
+    toast('Lobby was closed or opponent left.');
+  }
+}
+
+window.backToMenu = ()=>{
+  document.getElementById('result-overlay').classList.remove('show');
+  showScreen('entry');
+  loadLeaderboard('lb-entry-list');
+};
+</script>
+
+</body>
+</html>
